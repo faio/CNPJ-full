@@ -14,7 +14,7 @@ ou
 
 `python3 cnpj.py PASTA_COM_ZIPS csv PASTA_DE_SAIDA --dir`
 
-# Conversão para CSV ou SQLITE
+# Conversão para CSV ou para um SGBD
 
 ## Configurações prévias
 Para executar o script, é necessário que seu sistema contenha essas instalações:
@@ -61,19 +61,25 @@ Sócios | 1,71gb | 18.613.392
 <sup>*</sup> Observar que esta quantidade de linhas não corresponde ao número de linhas referentes a CNAEs secundários no arquivo original, uma vez que no original todos os CNAEs secundários de uma determinada empresa estão na mesma linha, enquanto na versão convertida é gerada uma linha para cada CNAE secundário associado à empresa.
 
 ## Como executar
-`python3 cnpj.py <caminho entrada> <tipo de saída:csv ou sqlite> <pasta saída> [--dir] [--noindex]`
+`python3 cnpj.py <caminho entrada> <tipo de saída:csv ou database> <pasta saída> [--dir] [--noindex] [--database_url]`
 
 Caso a base seja disponibilizada em múltiplos arquivos zip, salvar em uma pasta, usá-la como `<caminho entrada>` e especificar o argumento `--dir`.
 
-O argumento opcional `--noindex`, aplicável somente para saída sqlite, indica que **não** devem ser gerados índices automaticamente.
+O argumento opcional `--noindex`, aplicável somente para saída em algum SGBD, indica que **não** devem ser gerados índices
+ automaticamente.
 A criação de índices é muito recomendada e essencial para a funcionalidade de consultas.
+
+**Observação:**
+O sistema utiliza o SQLAchemy para conectar ao SGBD, portanto, qualquer banco de dados suportado pela lib funciona
+ corretamente deis que informado o parametro database_url corretamente. Um ponto importante é que dependendo do banco
+  SGBD utilizado será necessário instalar o conector, por exemplo, o PostGreSQL é necessário instalar o psycopg2-binary
 
 ## Exemplos
 `python3 cnpj.py "data\F.K032001K.D90308" sqlite "data"`
 
-`python3 cnpj.py "data" sqlite "output" --dir`
+`python3 cnpj.py "data" database "output" --dir --database_url=postgresql://scott:tiger@localhost/test`
 
-`python3 cnpj.py "data\DADOS_ABERTOS_CNPJ.zip" sqlite "data" --noindex`
+`python3 cnpj.py "data\DADOS_ABERTOS_CNPJ.zip" database "data" --noindex --database_url=postgresql://scott:tiger@localhost/test`
 
 ## Separando arquivos CSV por estado ou municipio
 
