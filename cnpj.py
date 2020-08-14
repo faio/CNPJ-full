@@ -82,7 +82,7 @@ REGISTROS_TIPOS = {
 }
 
 EMPRESAS_COLUNAS = [
-    (EMP_CNPJ,(3, 17)), 
+    (EMP_CNPJ,(3, 17)),
     (EMP_MATRIZ_FILIAL,(17,18)),
     (EMP_RAZAO_SOCIAL,(18,168)),
     (EMP_NOME_FANTASIA,(168,223)),
@@ -125,7 +125,7 @@ EMPRESAS_COLUNAS = [
 EMPRESAS_DTYPE = {EMP_CAPITAL_SOCIAL:float}
 
 SOCIOS_COLUNAS = [
-    (SOC_CNPJ,(3, 17)), 
+    (SOC_CNPJ,(3, 17)),
     (SOC_TIPO_SOCIO,(17,18)),
     (SOC_NOME_SOCIO,(18,168)),
     (SOC_CNPJ_CPF_SOCIO,(168,182)),
@@ -171,9 +171,8 @@ PREFIXO_INDICE = 'ix_'
 
 CHUNKSIZE=200000
 
-NOME_ARQUIVO_SQLITE = 'CNPJ_full.db'
 
-def cnpj_full(input_list, tipo_output, output_path):
+def cnpj_full(input_list, tipo_output, output_path, database_url):
     total_empresas = 0
     controle_empresas = 0
     total_socios = 0
@@ -184,9 +183,9 @@ def cnpj_full(input_list, tipo_output, output_path):
     if not os.path.exists(output_path):
         os.makedirs(output_path)
 
-    if tipo_output == 'sqlite':
-        import sqlite3
-        conBD = sqlite3.connect(os.path.join(output_path,NOME_ARQUIVO_SQLITE))
+    if tipo_output == 'database':
+        from sqlalchemy import create_engine
+        conBD = create_engine(database_url)
 
     header_colnomes = list(list(zip(*HEADER_COLUNAS))[0])
     empresas_colnomes = list(list(zip(*EMPRESAS_COLUNAS))[0])
@@ -202,15 +201,15 @@ def cnpj_full(input_list, tipo_output, output_path):
     for i_arq, arquivo in enumerate(input_list):
         print('Processando arquivo: {}'.format(arquivo))
 
-        dados = read_cfwf(arquivo, 
-                          type_width=1, 
+        dados = read_cfwf(arquivo,
+                          type_width=1,
                           colspecs= {'0':header_colspecs,
                                      '1':empresas_colspecs,
                                      '2':socios_colspecs,
                                      '6':CNAES_COLSPECS,
                                      '9':trailler_colspecs},
                           names={'0':header_colnomes,
-                                 '1':empresas_colnomes, 
+                                 '1':empresas_colnomes,
                                  '2':socios_colnomes,
                                  '6':CNAES_COLNOMES,
                                  '9':trailler_colnomes},
@@ -223,9 +222,9 @@ def cnpj_full(input_list, tipo_output, output_path):
         for i_bloco, bloco in enumerate(dados):
             print('Bloco {}: até linha {}. [Emps:{}|Socios:{}|CNAEs:{}]'.format(i_bloco+1,
                                                                (i_bloco+1)*CHUNKSIZE,
-                                                               total_empresas, 
-                                                               total_socios, 
-                                                               total_cnaes), 
+                                                               total_empresas,
+                                                               total_socios,
+                                                               total_cnaes),
                   end='\r')
 
             for tipo_registro, df in bloco.items():
@@ -248,23 +247,23 @@ def cnpj_full(input_list, tipo_output, output_path):
                     df[SOC_CPF_REPRES] = (df[SOC_CPF_REPRES]
                             .where(df[SOC_CPF_REPRES] != '***000000**',''))
                     df[SOC_NOME_REPRES] = (df[SOC_NOME_REPRES]
-                            .where(df[SOC_NOME_REPRES] != 'CPF INVALIDO',''))  
+                            .where(df[SOC_NOME_REPRES] != 'CPF INVALIDO',''))
 
-                    # Se socio for tipo 1 (cnpj), deixa campo intacto, do contrario, 
+                    # Se socio for tipo 1 (cnpj), deixa campo intacto, do contrario,
                     # fica apenas com os ultimos 11 digitos
                     df[SOC_CNPJ_CPF_SOCIO] = (df[SOC_CNPJ_CPF_SOCIO]
                             .where(df[SOC_TIPO_SOCIO] == '1',
                                    df[SOC_CNPJ_CPF_SOCIO].str[-11:]))
 
-                elif tipo_registro == '6': # cnaes_secundarios       
+                elif tipo_registro == '6': # cnaes_secundarios
                     total_cnaes += len(df)
 
                     # Verticaliza tabela de associacao de cnaes secundarios,
                     # mantendo apenas os validos (diferentes de 0000000)
-                    df = pd.melt(df, 
-                                 id_vars=[CNA_CNPJ], 
+                    df = pd.melt(df,
+                                 id_vars=[CNA_CNPJ],
                                  value_vars=range(99),
-                                 var_name=CNA_ORDEM, 
+                                 var_name=CNA_ORDEM,
                                  value_name=CNA_CNAE)
 
                     df = df[df[CNA_CNAE] != '0000000']
@@ -307,22 +306,22 @@ def cnpj_full(input_list, tipo_output, output_path):
                         header=True
 
                     nome_arquivo_csv = REGISTROS_TIPOS[tipo_registro] + '.csv'
-                    df.to_csv(os.path.join(output_path,nome_arquivo_csv), 
+                    df.to_csv(os.path.join(output_path,nome_arquivo_csv),
                               header=header,
                               mode=replace_append,
                               index=False,
                               quoting=csv.QUOTE_NONNUMERIC)
 
-                elif tipo_output == 'sqlite':
-                    replace_append = 'append' if (i_arq + i_bloco) > 0 else 'replace' 
-                        
-                    df.to_sql(REGISTROS_TIPOS[tipo_registro], 
-                              con=conBD, 
-                              if_exists=replace_append, 
+                elif tipo_output == 'database':
+                    replace_append = 'append' if (i_arq + i_bloco) > 0 else 'replace'
+
+                    df.to_sql(REGISTROS_TIPOS[tipo_registro],
+                              con=conBD,
+                              if_exists=replace_append,
                               index=False)
 
 
-    if tipo_output == 'sqlite':
+    if tipo_output == 'database':
         conBD.close()
 
     # Imprime totais
@@ -358,48 +357,46 @@ def cnpj_full(input_list, tipo_output, output_path):
     if tipo_output == 'csv':
         print(u'Arquivos CSV gerados na pasta {}.'.format(output_path))
 
-    elif tipo_output == 'sqlite':
+    elif tipo_output == 'database':
         print(u'''
-Arquivo SQLITE gerado: {}
+Banco de dados gerado!
 OBS: Uso de índices altamente recomendado!
-              '''.format(os.path.join(output_path,NOME_ARQUIVO_SQLITE)))
+              ''')
 
 
-def cnpj_index(output_path):
-    import sqlite3    
+def cnpj_index(database_url):
 
-    conBD = sqlite3.connect(os.path.join(output_path,NOME_ARQUIVO_SQLITE))
+    from sqlalchemy import create_engine
+
+    conBD = create_engine(database_url)
 
     print(u'''
 Criando índices...
 Essa operaçao pode levar vários minutos.
     ''')
 
-    cursorBD = conBD.cursor()
-
     for indice in INDICES:
         nome_indice = PREFIXO_INDICE + indice[0]
 
         sql_stmt = 'CREATE INDEX {} ON {} ({});'.format(nome_indice, indice[1], indice[2])
-        cursorBD.execute(sql_stmt)
+        conBD.execute(sql_stmt)
 
         print(u'Index {} criado.'.format(nome_indice))
 
     print(u'Indices criados com sucesso.')
 
-    conBD.close()
-
 
 def help():
     print('''
-Uso: python cnpj.py <path_input> <output:csv|sqlite> <path_output> [--dir] [--noindex]
+Uso: python cnpj.py <path_input> <output:csv|database> <path_output> [--dir] [--noindex] [--database_url]
 Argumentos opcionais:
  [--dir]: Indica que o <path_input> e uma pasta e pode conter varios ZIPs.
- [--noindex]: NAO gera indices automaticamente no sqlite ao final da carga.
+ [--noindex]: NAO gera indices automaticamente no banco de dados ao final da carga.
+ [--database_url]: URL de conexão com o banco de dados.
 
-Exemplos: python cnpj.py "data/F.K032001K.D81106D" sqlite "output"
-          python cnpj.py "data" sqlite "output" --dir
-          python cnpj.py "data" sqlite "output" --dir --noindex
+Exemplos: python cnpj.py "data/F.K032001K.D81106D" database "output"
+          python cnpj.py "data" database "output" --dir --database_url=postgresql://scott:tiger@localhost/test 
+          python cnpj.py "data" database "output" --dir --noindex --database_url=postgresql://scott:tiger@localhost/test
           python cnpj.py "data" csv "output" --dir
     ''')
 
@@ -417,9 +414,10 @@ def main():
 
         gera_index = True
         input_list = [input_path]
+        database_url = None
 
         if num_argv > 4:
-            for opcional in sys.argv[4:num_argv]:
+            for i, opcional in enumerate(sys.argv[4:num_argv]):
                 if (opcional == '--noindex'):
                     gera_index = False
 
@@ -436,28 +434,32 @@ def main():
                         sys.exit(-1)
 
                     input_list.sort()
-
+                elif opcional.startswith('--database_url'):
+                    database_url = opcional[15:]
                 else:
                     print(u'ERRO: Argumento opcional inválido.')
                     help()
                     sys.exit(-1)
 
-        if tipo_output not in ['csv','sqlite']:
+        if tipo_output not in ['csv','database']:
             print('''
 ERRO: tipo de output inválido. 
-Escolha um dos seguintes tipos de output: csv ou sqlite.
+Escolha um dos seguintes tipos de output: csv ou database.
             ''')
             help()
-
+        elif tipo_output == 'database' and not database_url:
+            print('ERRO: Para gravar no banco de dados, é necessário informar o --database_url')
+            sys.exit(-1)
         else:
             print('Iniciando processamento em {}'.format(datetime.datetime.now()))
 
-            cnpj_full(input_list, tipo_output, output_path)
+            cnpj_full(input_list, tipo_output, output_path, database_url)
 
-            if (gera_index) and (tipo_output == 'sqlite'):
-                cnpj_index(output_path)
+            if (gera_index) and (tipo_output == 'database'):
+                cnpj_index(database_url)
 
             print('Processamento concluido em {}'.format(datetime.datetime.now()))
+
 
 if __name__ == "__main__":
     main()
